@@ -7,4 +7,7 @@ disp('fingers crossed')
 %I moved this file to a new folder. How about now?
 
 %Demo commit
+<<<<<<< HEAD
 %One more
+=======
+>>>>>>> origin/master
