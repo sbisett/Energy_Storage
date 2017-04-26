@@ -73,6 +73,29 @@ classdef steam_accumulator_separate < handle
         PERCENT_LOSS_DISCHARGE; %percent, loss due to heat loss during discharge.
         HH_initial; %kJ, initial enthalpy of fully charged steam accumulator
         charge_ramp; %percent/s, charging ramp rate
+        
+        %New properties set for balance equations
+        %Mass
+        mass_D_initial; %kg, at the beginning of discharge
+        mass_D_final; %kg, at the end of discharge
+        mass_D_inflow; %kg, total amount that has flowed in during discharge, should be 0
+        mass_D_outflow; %kg, total amount that has flowed out during discharge
+        mass_D_balance = []; %kg, should be 0 unless balance not 
+        mass_D_relative; %Relative error in mass
+        %Volume
+        Vol_geometric; %m^3, volume of the pipes in the tank
+        Vol_D_initial; %m^3, initial volume of the tank
+        Vol_D_final = []; %m^3, final volume of the tank (along all timesteps)
+        Vol_D_balance = []; %m^3, should be 0 unless balance not satisfied
+        Vol_D_relative; %Relative error in volume
+        %Energy
+        Energy_D_initial;
+        Energy_D_final;
+        Energy_D_inflow;
+        Energy_D_outflow; %Find a way to save as a vector
+        Energy_D_balance = [];
+        Energy_ceiling;
+        Energy_D_relative; %Relative error in energy
     end
     properties(Constant)
        PASCALS_PER_BAR = 1.e5;
@@ -91,6 +114,7 @@ classdef steam_accumulator_separate < handle
             object.store_time=T_STORE;
             object.length = LTANK;
             object.radius = RTANK;
+            object.Vol_geometric = VTANK;
             object.setup_arrays(discharge);
             object.initial_conditions(X0, P0, VTANK);
         end
@@ -108,11 +132,16 @@ classdef steam_accumulator_separate < handle
             else
                 object.VAP_OUT(object.i)=0; %sets mass flow rate to zero during storage
             end
-            for s=1:(object.N-1)
+            %The flow calculations need to be initialized at 0
+            object.Energy_D_outflow = 0; %used to solve matrix dimension issue
+            object.mass_D_inflow = 0;
+            object.mass_D_outflow = 0;
+            for step = 1:(object.N-1)
                 object.m1b(object.i)=object.LIQ_IN-object.LIQ_OUT; %kg/s
                 object.m2b(object.i)=object.VAP_IN-object.VAP_OUT(object.i); %kg/s
                 object.mh1b(object.i)=object.LIQ_IN*object.HLIQ_IN-object.LIQ_OUT*object.h1(object.i); %kW
                 object.mh2b(object.i)=object.VAP_IN*object.HVAP_IN-object.VAP_OUT(object.i)*object.h2(object.i); %kW
+                
 
                 object.hL_sat = XSteam('hL_p',object.p(object.i)); %saturated liquid enthalpy (kJ/kg)
                 object.hV_sat = XSteam('hV_p',object.p(object.i)); %saturated vapor enthalpy (kJ/kg)
@@ -123,7 +152,7 @@ classdef steam_accumulator_separate < handle
                     object.me(object.i) = (object.rho1(object.i)*object.Vol1(object.i)*(object.h1(object.i)-object.hL_sat))/(object.TAU*object.r);
                 else
                     object.me(object.i) = 0.;
-                    object.mc = object.rho1(object.i)*object.Vol1(object.i)*(object.hL_sat-object.h1(object.i))/(object.TAU*object.r);
+                    object.mc(object.i) = (object.rho1(object.i)*object.Vol1(object.i)*(object.hL_sat-object.h1(object.i)))/(object.TAU*object.r);
                 end
 
                 object.Area_int(object.i+1) = 2*object.radius*cos(asin(((object.Vol1(object.i)/object.Vol_total(object.i))-object.radius)/object.radius))*object.length; %Minimum Interface Area between the two phases[m^2/m^3]
@@ -134,7 +163,19 @@ classdef steam_accumulator_separate < handle
                 object.mpt2(object.i)=object.me(object.i)-object.mc; %kg/s, vapor mass change due to evaporation and condensation
                 object.m1(object.i+1)=object.m1(object.i)+(object.m1b(object.i)+object.mpt1(object.i))*object.time_step; %liquid mass balance (kg)
                 object.m2(object.i+1)=object.m2(object.i)+(object.m2b(object.i)+object.mpt2(object.i))*object.time_step; %vapor mass balance (kg)
-
+                
+                %Values for mass balance
+                object.mass_D_initial = object.m1(1) + object.m2(1);
+                object.mass_D_final = object.m1(object.i) + object.m2(object.i);
+                %This loop will sum the mass of the inflows and outflows 
+                object.mass_D_inflow = 0;
+                object.mass_D_outflow = 0;
+                for index = 1:object.i
+                object.mass_D_inflow = 0; %because we are discharging, flow in = 0
+                object.mass_D_outflow = object.mass_D_outflow + object.m1b(index) + object.m2b(index);
+                end
+                object.mass_D_balance(object.i) = object.mass_D_initial - object.mass_D_final - object.mass_D_outflow + object.mass_D_inflow;
+                
                 object.dv1dh(object.i)=(XSteam('v_ph',object.p(object.i),object.h1(object.i)+object.Dh)-XSteam('v_ph',object.p(object.i),object.h1(object.i)))/object.Dh; % (m3/kJ), change in v1 per change in h at constant p
                 object.dv2dh(object.i)=(XSteam('v_ph',object.p(object.i),object.h2(object.i)+object.Dh)-XSteam('v_ph',object.p(object.i),object.h2(object.i)))/object.Dh; % (m3/kJ)
                 object.dv1dp(object.i)=(XSteam('v_ph',object.p(object.i)+object.Dp,object.h1(object.i))-XSteam('v_ph',object.p(object.i),object.h1(object.i)))/(object.Dp*object.PASCALS_PER_BAR); %(m5/(N*kg)) change in v1 per change in p at constant h
@@ -147,7 +188,7 @@ classdef steam_accumulator_separate < handle
                 term5 = object.m1(object.i)*(object.dv1dp(object.i)+object.v1(object.i)*object.dv1dh(object.i)*.001); %m5/N
                 term6 = object.m2(object.i)*(object.dv2dp(object.i)+object.v2(object.i)*object.dv2dh(object.i)*.001); %m5/N
 
-                %% final values at end of disch are here
+                %% final values at end of discharge are here
                 object.p(object.i+1) = ((object.time_step*((term1+term2-term3-term4)/(term5+term6)))/object.PASCALS_PER_BAR)+object.p(object.i); %bar
                 object.h1(object.i+1) = (object.mh1b(object.i)+object.mpt1(object.i)*object.hV_sat+(object.Vol1(object.i)/object.time_step)*object.PASCALS_PER_BAR*(object.p(object.i+1)-object.p(object.i))*.001-(object.h1(object.i)/object.time_step)*(object.m1(object.i+1)-object.m1(object.i)))*(object.time_step/object.m1(object.i))+object.h1(object.i)+object.Qint(object.i)*(object.time_step/object.m1(object.i)); %kJ/kg
                 object.h2(object.i+1) = (object.mh2b(object.i)+object.mpt2(object.i)*object.hV_sat+(object.Vol2(object.i)/object.time_step)*object.PASCALS_PER_BAR*(object.p(object.i+1)-object.p(object.i))*.001-(object.h2(object.i)/object.time_step)*(object.m2(object.i+1)-object.m2(object.i)))*(object.time_step/object.m2(object.i))+object.h2(object.i)-object.Qint(object.i)*(object.time_step/object.m1(object.i)); %kJ/kg
@@ -155,19 +196,43 @@ classdef steam_accumulator_separate < handle
                 object.t2(object.i+1) = XSteam('T_ph',object.p(object.i+1),object.h2(object.i+1));
                 object.rho1(object.i+1) = XSteam('rho_ph',object.p(object.i+1),object.h1(object.i+1));
                 object.rho2(object.i+1) = XSteam('rho_ph',object.p(object.i+1),object.h2(object.i+1));
+                
                 object.Vol1(object.i+1) = object.m1(object.i+1)/object.rho1(object.i+1);
                 object.Vol2(object.i+1) = object.m2(object.i+1)/object.rho2(object.i+1); 
                 object.Vol_total(object.i+1)=object.Vol1(object.i+1)+object.Vol2(object.i+1); 
                 object.v1(object.i+1) = 1/object.rho1(object.i+1);
                 object.v2(object.i+1) = 1/object.rho2(object.i+1);
+                
+                %Values for Volume Balance
+                %object.Vol_geometric = VTANK; %Defined during setup
+                object.Vol_D_initial = object.Vol_total(1);
+                object.Vol_D_final(object.i) = object.Vol_total(object.i);
+                object.Vol_D_balance(object.i) = 2*object.Vol_geometric - object.Vol_D_initial - object.Vol_D_final(object.i);
+                
                 object.x(object.i+1) = object.m2(object.i+1)/(object.m1(object.i+1)+object.m2(object.i+1));
                 object.QLOSS(object.i+1) = object.length*Q_loss(object,(object.t1(object.i+1)+object.t2(object.i+1))/2); %kW
-                object.qloss1(object.i+1)=(object.Vol1(object.i+1)/(object.Vol1(object.i+1)+object.Vol2(object.i+1)))*object.QLOSS(object.i+1); %(kW)
-                object.qloss2(object.i+1)=(object.Vol2(object.i+1)/(object.Vol1(object.i+1)+object.Vol2(object.i+1)))*object.QLOSS(object.i+1); %(kW)
+                object.qloss1(object.i+1)=(object.m1(object.i+1)/(object.m1(object.i+1)+object.m2(object.i+1)))*object.QLOSS(object.i+1); %(kW)
+                object.qloss2(object.i+1)=(object.m2(object.i+1)/(object.m1(object.i+1)+object.m2(object.i+1)))*object.QLOSS(object.i+1); %(kW)
+                
+                %Values for Energy Balance
+                object.Energy_D_initial = object.m1(1)*object.h1(1) + object.m2(1)*object.h2(1);
+                object.Energy_D_final = object.m1(object.i)*object.h1(object.i) + object.m2(object.i)*object.h2(object.i);
+                object.Energy_D_inflow = 0; %During discharge no energy is added (Until PCM is integrated)
+                object.Energy_ceiling = object.Vol_geometric*XSteam('rhoV_p',70)*XSteam('hV_p',70);
+                
+                %This loop will sum the Energy of the flows
+                %This needs maintenance. mh2b is a total not the amount for
+                %just one step. QLOSS is by one step. Loop Q and dont loop
+                %for mass flow
+                for index = 1:object.i
+                object.Energy_D_outflow = object.mh1b(object.i) + object.mh2b(object.i) + object.QLOSS(object.i); %This is still not quite right. QLOSS is not being summed here
+                end
+                object.Energy_D_balance(object.i) = object.Energy_D_initial + object.Energy_D_inflow + object.Energy_D_outflow - object.Energy_D_final; %outflow is already negative
                 
                 if isnan(object.p(object.i+1))
-                    disp('Error. Increase pipe length');
-                    break
+                    %disp('Error. Increase pipe length');
+                    error('**Increase pipe length**')
+                   
                 end
                 
                 if discharge == 1 %if discharging
@@ -180,24 +245,35 @@ classdef steam_accumulator_separate < handle
                     object.VAP_OUT(object.i+1)=0;
                 end
                 object.i = object.i+1;
-            end
-            sum=0;
-            for count=1:length(object.QLOSS)
-            sum = sum + object.QLOSS(count)*object.time_step;
+            end %of the for loop
+            
+            %This sums up the QLOSS throughout the discharge of the
+            %accumulator
+            QLOSSsum=0;
+            for count=1:length(object.QLOSS);
+            QLOSSsum = QLOSSsum + object.QLOSS(count)*object.time_step;
             end
             if discharge == 1
-                object.POWER_LOSS_AVERAGE_DISCHARGE = sum*(1/(object.discharge_time)); %kW
-                object.ENERGY_LOSS_DISCHARGE = sum; %kJ
+                object.POWER_LOSS_AVERAGE_DISCHARGE = QLOSSsum*(1/(object.discharge_time)); %kW
+                object.ENERGY_LOSS_DISCHARGE = QLOSSsum; %kJ
                 object.PERCENT_LOSS_DISCHARGE = (object.ENERGY_LOSS_DISCHARGE/object.HH_initial)*100; %percent loss during discharge due to heat loss
             else
-                object.POWER_LOSS_AVERAGE_STORE = sum*(1/object.store_time); %kW
-                object.ENERGY_LOSS_STORE = sum; %kJ
-                object.PERCENT_LOSS_STORE = (object.ENERGY_LOSS_STORE/object.HH_initial)*100 %percent loss during storage due to heat loss
+                object.POWER_LOSS_AVERAGE_STORE = QLOSSsum*(1/object.store_time); %kW
+                object.ENERGY_LOSS_STORE = QLOSSsum; %kJ
+                object.PERCENT_LOSS_STORE = (object.ENERGY_LOSS_STORE/object.HH_initial)*100; %percent loss during storage due to heat loss
             end
+            
+            %End state of accumulator P,x
             object.P_disch_final = object.p(object.i-1); %bar, final value after discharge
             object.X_disch_final = object.x(object.i-1); %final vapor quality
+            
+            %Balance evaluation of discharge
+            object.mass_D_relative = (object.mass_D_balance(object.i-1)/object.mass_D_initial) * 100; % in percent
+            object.Vol_D_relative = (object.Vol_D_balance(object.i-1)/object.Vol_geometric) * 100; % in percent
+            object.Energy_D_relative = (object.Energy_D_balance(object.i-1))/object.Energy_ceiling * 100; % in percent
         
         end
+
         %%%%%charging block
         function object = charge(object,P0,X0,VTANK,MDOT_CHARGE,POWER_REDUCTION,POWER_SA,p_topup,h_topup,sgh_input,sgh_output)
            
@@ -306,7 +382,7 @@ classdef steam_accumulator_separate < handle
             storeCost = 0; %cost of holding tank is negligble
 
             totalEnergyCost = pipe_and_insulation + buildingCost + storeCost; %Million $
-            totalCC=totalPowerCost+totalEnergyCost %Million $, total overnight capital cost
+            totalCC=totalPowerCost+totalEnergyCost; %Million $, total overnight capital cost
 
             c1=(3/4)*period-c_t/2; %hr, charge time integral lower bound
             c2=(3/4)*period+c_t/2; %hr, charge time integral upper bound
