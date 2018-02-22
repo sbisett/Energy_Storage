@@ -4,15 +4,15 @@ close all
 start_time = tic;
 
 %SA properties
-POWER_SA = 300; %MWe, maximum electric power provided by steam accumulator
-T_MAX = 3; %hr, time at maximum SA power
+POWER_SA = 300; %MW, maximum electric power provided by steam accumulator
+ENERGY_SA = 1049.7; %MWh %1049.7
+T_MAX = ENERGY_SA/POWER_SA; %hr, time at maximum SA power
 D_RAMP_RATE = 1.67; %percent/min, discharge ramp rate (SA turbine, % of max power/min)
 POWER_SA_INITIAL = 0; %MW, cold start
 T_RAMP = 60*((POWER_SA-POWER_SA_INITIAL)/((D_RAMP_RATE/100)*POWER_SA)); %s, time to ramp up to max power
 T_END = T_RAMP+T_MAX*3600; %s, discharge time including ramp up and time at max power
-ENERGY_SA = 0.5*T_RAMP*(POWER_SA-POWER_SA_INITIAL)/3600+POWER_SA*T_MAX; %MWh, electric energy provided by SA in one discharge cycle
 T_STORE = 10*3600; %s, storage time
-DT = .001;  % s, time step
+DT = 10;  % s, time step
 RTANK = 0.4064; % m (16 inches)
 LTANK = 100000.; % m, pipe length
 VTANK = LTANK.*pi.*RTANK^2.;  % m3
@@ -24,7 +24,7 @@ for t = 1:t_length
 end
 %accumulator initial thermo properties
 P0 = 70; % bar, initial pressure
-X0 = 0.06; % v apor quality (mass fraction) 
+X0 = 0.06; % vapor quality (mass fraction) 
 
 %Main plant properties
 MAIN_POWER = 1300; %MWe, power from main turbine of plant
@@ -46,9 +46,21 @@ interest=0.07; %for amortization period
 period=6; %hours, price period
 peakAmplitude=25; %$/MWh
 avgElecPrice=34; %$/MWh
-start_cost = 11; %$/MW-start, from Neal
-var_OM = 8; %$/MWh, from Neal
+coldCyclesPerYear = 100; %cycles/year
+warmCyclesPerYear = 50; %cycles/year
+hotCyclesPerYear = 50; %cycles/year
+var_om = 8; %$/MWh, from Neal
 
+%designs: divert main steam (MS); preheat feedwater (FW)
+%power train: if Pdisch > 0.2Preactor, need additional power train (PT); if not, can just upgrade exisitng (UG)
+%heat sink: if diverting MS and Pchg > 0.5Preactor, need heat sink in case of issue taking accumulator offline (HS); otherwise (NA)
+%case 1: MS, PT, HS
+%case 2: MS, UG, HS
+%case 3: MS, PT, NA
+%case 4: MS, UG, NA
+%case 5: FW, PT, NA
+%case 6: FW, PT, NA
+caseNumber = 3;
 
 %%runs steam_accumulator_separate code
 %run either block 1 or block 2 (comment out the one you aren't using)
@@ -59,7 +71,7 @@ discharge = 1; %discharge on
 acc=steam_accumulator_separate(T_END,T_STORE,T_RAMP,DT,VTANK,P0,X0,LTANK,RTANK,discharge);
 acc.run_accumulator(POWER_SA, pow, discharge); %discharge
 acc.charge(P0,X0,VTANK,MDOT_CHARGE,POWER_REDUCTION,POWER_SA,p_topup,h_topup,sgh_input,sgh_output);
-[netRevenue,CC,RC,RD,totalOM,totalCC]=acc.revenue(POWER_SA,ENERGY_SA,MAIN_POWER,MIN_LOAD,LTANK,life,interest,period,peakAmplitude,avgElecPrice,start_cost,var_OM);
+[netRevenue,CC,RC,RD,totalOM,totalCC]=acc.revenue(POWER_SA,ENERGY_SA,MAIN_POWER,MIN_LOAD,LTANK,life,interest,period,peakAmplitude,avgElecPrice,caseNumber,hotCyclesPerYear,warmCyclesPerYear,coldCyclesPerYear,var_om);
    
 
 %%store

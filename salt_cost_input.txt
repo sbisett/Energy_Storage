@@ -1,0 +1,47 @@
+case
+power energy
+Cp Ce Op Oe
+Cp_scale Ce_scale Op_scale Oe_Scale
+coldStart warmStart hotStart
+
+BASE
+50 375     % MW MWh
+37.53 55.21 1.88 2.76   MM$ MM$ MM$/yr MM$/yr
+0.7 0.7 0.7 0.7		    % % % %
+75 58 36      $/MW-Cycle
+
+CASE1
+50 375     % MW MWh
+37.53 75.21 1.88 2.76   MM$ MM$ MM$/yr MM$/yr
+0.7 0.3 0.7 0.7		    % % % %
+75 58 36      $/MW-Cycle
+
+CASE2
+50 375     % MW MWh
+17.53 75.21 1.68 2.76   MM$ MM$ MM$/yr MM$/yr
+0.7 0.3 0.7 0.7		    % % % %
+75 58 36      $/MW-Cycle
+
+CASE3
+50 375     % MW MWh
+37.53 55.21 1.88 2.76   MM$ MM$ MM$/yr MM$/yr
+0.7 0.7 0.7 0.7		    % % % %
+75 58 36      $/MW-Cycle
+
+CASE4
+50 375     % MW MWh
+17.53 55.21 1.68 2.76   MM$ MM$ MM$/yr MM$/yr
+0.7 0.7 0.7 0.7		    % % % %
+75 58 36      $/MW-Cycle
+
+CASE5
+50 375     % MW MWh
+42.53 55.21 2.08 2.76   MM$ MM$ MM$/yr MM$/yr
+0.7 0.7 0.7 0.7		    % % % %
+75 58 36      $/MW-Cycle
+
+CASE6
+50 375     % MW MWh
+22.53 55.21 1.88 2.76   MM$ MM$ MM$/yr MM$/yr
+0.7 0.7 0.7 0.7		    % % % %
+75 58 36      $/MW-Cycle
