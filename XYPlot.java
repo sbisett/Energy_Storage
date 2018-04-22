@@ -33,10 +33,10 @@ public abstract class XYPlot extends Application {
     		double[] xrange9, double[] yrange9,
     		String xlabel, String ylabel, String title, double[] yaxis) 
     {
-	    int l,m,n;
+	    //this loop determines a y max range
+    		int l,m,n;
 	    double max_x, max_y=0.;
 	    n=yrange.length;
-	     
 	     for (l=0; (l<(n-1)); l++) 
 	     {
 	        if(yrange[l]>max_y) 
@@ -45,12 +45,16 @@ public abstract class XYPlot extends Application {
 	        }//if 
 	     }// for l
 	     
+	     //creates x and y axis labels
+	     //y axis is based on the passed values from Salt_Tanks_Main.java
 	     max_x=xrange[xrange.length-1];
 	     final NumberAxis x_axis = new NumberAxis(0,max_x, max_x/10.);
 	     final NumberAxis y_axis = new NumberAxis (yaxis[0], yaxis[1], yaxis[1]/10.); //change if not in the range when plotted
 	     final ScatterChart<Number,Number> sc = new ScatterChart<Number,Number>(x_axis,y_axis);
 	     x_axis.setLabel(xlabel);
 	     y_axis.setLabel(ylabel);
+	     
+	     //creates a data series for each sensitivity combination
 	     XYChart.Series s1 = new XYChart.Series();
 	     XYChart.Series s2 = new XYChart.Series();
 	     XYChart.Series s3 = new XYChart.Series();
@@ -61,6 +65,7 @@ public abstract class XYPlot extends Application {
 	     XYChart.Series s8 = new XYChart.Series();
 	     XYChart.Series s9 = new XYChart.Series();
 	     
+	     //creates a key (names all the data series)
 	     sc.setTitle(title);
 	     s1.setName("550K, 350K, 20W/m2/K");
 	     s2.setName("525K, 375K, 20W/m2/K");
@@ -72,6 +77,7 @@ public abstract class XYPlot extends Application {
 	     s8.setName("525K, 375K, 50W/m2/K");
 	     s9.setName("500K, 400K, 50W/m2/K");
 	     
+	     //assigns arrays passed from Salt_Tanks_Main.java to the created data series
 	     for (m=0; m<xrange.length-1; m++) 
 	     {
 	       s1.getData().add(new XYChart.Data(xrange[m],yrange[m]));
@@ -82,10 +88,10 @@ public abstract class XYPlot extends Application {
 	       s6.getData().add(new XYChart.Data(xrange6[m],yrange6[m]));
 	       s7.getData().add(new XYChart.Data(xrange7[m],yrange7[m]));
 	       s8.getData().add(new XYChart.Data(xrange8[m],yrange8[m]));
-	       s9.getData().add(new XYChart.Data(xrange9[m],yrange9[m]));
-	       
+	       s9.getData().add(new XYChart.Data(xrange9[m],yrange9[m]));  
 	     }// for m
 	     
+	     //plots the data
 	     sc.getData().addAll(s1, s2, s3,s4,s5,s6,s7,s8,s9);
 	     Scene scene  = new Scene(sc, 500, 400);
 	     plot_stage.setScene(scene);
