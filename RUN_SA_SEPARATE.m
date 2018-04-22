@@ -4,9 +4,9 @@ close all
 start_time = tic;
 
 %SA properties
-POWER_SA = 300; %MW, maximum electric power provided by steam accumulator
-ENERGY_SA = 1049.7; %MWh %1049.7
-T_MAX = ENERGY_SA/POWER_SA; %hr, time at maximum SA power
+POWER_SA = 50; %MW, maximum electric power provided by steam accumulator
+ENERGY_SA = 400; %MWh 
+T_MAX = ENERGY_SA/POWER_SA; %hr, time at maximum SA power --> essentially the discharge time without the ramping
 D_RAMP_RATE = 1.67; %percent/min, discharge ramp rate (SA turbine, % of max power/min)
 POWER_SA_INITIAL = 0; %MW, cold start
 T_RAMP = 60*((POWER_SA-POWER_SA_INITIAL)/((D_RAMP_RATE/100)*POWER_SA)); %s, time to ramp up to max power

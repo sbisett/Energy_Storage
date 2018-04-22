@@ -262,16 +262,29 @@ classdef steam_accumulator_separate < handle
             object.efficiency_r = discharge_energy_boost/charge_energy_loss;
             
         end
-
+        
+        %Kayla's section 
         function [netRevenue,CC,RC,RD,totalOM,totalCC]=revenue(object,POWER_SA,ENERGY_SA,MAIN_POWER,MIN_LOAD,LTANK,life,interest,period,peakAmplitude,avgElecPrice,caseNumber, hotCyclesPerYear, warmCyclesPerYear, coldCyclesPerYear, var_om)   
+           
+            %this section mainly determines the charge and discharge time
+            %discharge time is calculated a value input in RUN_SA_SEPARATE
+            %charge time for the SA is calculated with line 276, and charge time for the molten salt is calculated with line 277
+            %comment/uncomment one of the charge time lines depending on which model is being used
             %length must be connected to capital cost through pipe and insulation costs
             Y=(1/period)*24*365; %storage cycles per year
             d_t = object.discharge_time/3600; %hours, discharge time
-            c_t = object.charge_time/3600; %hours, charge time
-            
-            %take case values from SA_cost_input.txt
+            %c_t = object.charge_time/3600 %hours, charge time for SA
+            c_t = (POWER_SA + 7.61232)/(POWER_SA-7.61232)*d_t %hours, charge time for salt
+             
+            %case number input in RUN_SA_SEPARATE assinged to local variable. Text file name also assigned
+            %SA text file: SA_cost_input.txt
+            %salt text file: salt_cost_input.txt
+            %change fileName as indicated below
             caseName = 'CASE' + string(caseNumber);
-            fileName = 'SA_cost_input.txt'; %change file name in otder to test different ones 
+            fileName = 'salt_cost_input.txt'; %change file name in otder to test different ones 
+            
+            %this section searches for the case name in each line of the text file
+            %when the case name is found in a line, it assignes all the following text file lines in that case to a MATLAB variable 
             fileID = fopen(fileName);
                 while ~feof(fileID)
                     tline = fgetl(fileID);
@@ -284,6 +297,11 @@ classdef steam_accumulator_separate < handle
                     end
                 end
                 fclose(fileID);
+            
+           
+            %in the following sections (lines 307-328), the lines assigned above are parsed to find numerical values of interest (power/energy costs, scale factors, etc)
+            %numerical values are put into an array 
+            %NOTE: the spaces before the units (like in line 307) are exact (based on the spaces in the text file -- don't change)
                 
             %dive power energy line into array of doubles
             powerEnergyLine2 = extractBefore(powerEnergyLine, '     % MW MWh');
@@ -309,6 +327,9 @@ classdef steam_accumulator_separate < handle
             startCostStringArray = [extractBefore(startCostLine2, startCostSpaces(1)) extractBetween(startCostLine2, startCostSpaces(1)+1, startCostSpaces(2)-1) extractAfter(startCostLine2, startCostSpaces(2))];
             startCostDoubleArray = str2double(startCostStringArray);
             
+            
+            %in these sections (lines 334-358), values from the above arrays are assigned to individual variables
+       
             %reference power and energy assigned
             Pref = powerEnergyDoubleArray(1); %reference power
             Eref = powerEnergyDoubleArray(2); %reference energy
@@ -325,7 +346,7 @@ classdef steam_accumulator_separate < handle
             n_Op = scaleFactorDoubleArray(3); %scaleFactor OM (power)
             n_Oe = scaleFactorDoubleArray(4); %scaleFactor cost (energy)
             
-            %Cp Ce Op Oe scaled
+            %Cp Ce Op Oe scaled and assinged 
             Cp_scaled = Cp * (POWER_SA/Pref)^n_Cp; %cost scaled (power)
             Ce_scaled = Ce * (ENERGY_SA/Eref)^n_Ce; %cost scaled (energy)
             Op_scaled = Op * (POWER_SA/Pref)^n_Op; %OM scaled (power)
@@ -337,6 +358,7 @@ classdef steam_accumulator_separate < handle
             hotStart = startCostDoubleArray(3); %$/MW-Cycle
             cyclingCost = ((coldStart * coldCyclesPerYear + warmStart * warmCyclesPerYear + hotStart * hotCyclesPerYear) * POWER_SA)/1000000; %MM$/year
             
+            %calculations to determine ADC, ACP, DP
             c1=(3/4)*period-c_t/2; %hr, charge time integral lower bound
             c2=(3/4)*period+c_t/2; %hr, charge time integral upper bound
             d1=(period/4)-d_t/2; %hr, discharge time integral lower bound
@@ -348,7 +370,8 @@ classdef steam_accumulator_separate < handle
             ACP= intC/(c2-c1); %$/MWh, Average charge price
             DP=ADP-ACP ; %$/MWh, delta price
   
-            %%%These need to be updated to account for ramping.
+            %final costs/revenues caluclated and displayed 
+            %These need to be updated to account for ramping.
             RC=ACP*c_t*Y*(MAIN_POWER-MIN_LOAD)/10^6; %MM$/year, forgone revenue from charging
             RD=ADP*d_t*Y*POWER_SA/10^6; %MM$/year, revenue from discharging
             totalCC=Cp_scaled+Ce_scaled %Million $, total overnight capital cost
@@ -356,9 +379,7 @@ classdef steam_accumulator_separate < handle
             CC=totalCC*(interest+(interest/((1+interest)^life-1))); %MM$/year, amortized capital cost
             fixed_om = (Oe_scaled+Op_scaled)*(10^6)*(1/POWER_SA)*(1/1000) %$/kw-year
                 disp('   $/kw-year')
-            variable_om = var_om %$/MWh
-                disp('   $/MWh')
-            totalOM = Op_scaled + Oe_scaled + cyclingCost + variable_om*ENERGY_SA*Y/1000000 %MM$/year
+            totalOM = Op_scaled + Oe_scaled + cyclingCost + var_om *ENERGY_SA*Y/1000000 %MM$/year
                 disp('   MM$/year')
             startCost = cyclingCost*1000000/(POWER_SA*(hotCyclesPerYear+warmCyclesPerYear+coldCyclesPerYear)) %$/MW-start
                 disp('   $/MW-start')
@@ -388,7 +409,7 @@ classdef steam_accumulator_separate < handle
             %heat loss rate in kW/m
             %setting up pipe properties.
             ksteel=41; %(W/mK)
-            kinsul=0.079; %(W/mK)
+            kinsul=0.07; %(W/mK) --> thermal condictivity of calcium silicate 
             Dpipe=0.8128; %pipe outer diameter (m)
             Tpipe=0.015875; %pipe thickness (m)
             Tinsul=0.4064; %insulation thickness (m)
