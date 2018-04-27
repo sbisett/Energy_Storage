@@ -306,7 +306,7 @@ classdef steam_accumulator_separate < handle
             %dive power energy line into array of doubles
             powerEnergyLine2 = extractBefore(powerEnergyLine, '     % MW MWh');
             powerEnergySpaces = regexp(powerEnergyLine2, ' ');
-            powerEnergyStringArray = [extractBefore(powerEnergyLine2, powerEnergySpaces(1)) extractAfter(powerEnergyLine2, powerEnergySpaces(1))];
+            powerEnergyStringArray = [string(extractBefore(powerEnergyLine2, powerEnergySpaces(1))) string(extractAfter(powerEnergyLine2, powerEnergySpaces(1)))];
             powerEnergyDoubleArray = str2double(powerEnergyStringArray);   
             
             %divide cost line into array of doubles
