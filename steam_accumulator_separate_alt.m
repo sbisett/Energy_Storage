@@ -1,6 +1,5 @@
- classdef steam_accumulator_separate < handle
+classdef steam_accumulator_separate_alt < handle
     properties
-        InsulationThickness;
         p = []; %bar
         m1 = []; %kg, liquid
         m2 = []; %kg, vapor
@@ -84,7 +83,7 @@
        Coeff_int= 910; %Interphase heat transfer coefficient[W/m^2K]
     end
     methods
-        function object = steam_accumulator_separate(T_DISCHARGE,T_STORE,T_RAMP,DT,VTANK,P0,X0,LTANK,RTANK,discharge,InsulationThickness)
+        function object = steam_accumulator_separate_alt(T_DISCHARGE,T_STORE,T_RAMP,DT,VTANK,P0,X0,LTANK,RTANK,discharge)
             object.i=1;
             object.time_step=DT;
             object.discharge_time=T_DISCHARGE;
@@ -93,9 +92,9 @@
             object.length = LTANK;
             object.radius = RTANK;
             object.setup_arrays(discharge);
-            object.initial_conditions(X0, P0, VTANK,InsulationThickness);
+            object.initial_conditions(X0, P0, VTANK);
         end
-        function run_accumulator(object, POWER_SA, pow, discharge,InsulationThickness)
+        function run_accumulator(object, POWER_SA, pow, discharge)
             object.VAP_IN = 0; %during discharge 
             object.LIQ_IN = 0;
             object.LIQ_OUT = 0;
@@ -103,7 +102,7 @@
             object.PLIQ_IN = 70.; %bar (not utilized during discharge)
             object.HVAP_IN = XSteam('hV_p',object.PVAP_IN); %kj/kg
             object.HLIQ_IN = XSteam('hL_p',object.PLIQ_IN); %kj/kg
-            object.InsulationThickness = InsulationThickness;
+            
             
             if discharge == 1
             [object.VAP_OUT(object.i), object.thermo_eff(object.i)]=rankine(object, pow(object.i), object.p(object.i));
@@ -163,7 +162,7 @@
                 object.v1(object.i+1) = 1/object.rho1(object.i+1);
                 object.v2(object.i+1) = 1/object.rho2(object.i+1);
                 object.x(object.i+1) = object.m2(object.i+1)/(object.m1(object.i+1)+object.m2(object.i+1));
-                object.QLOSS(object.i+1) = object.length*Q_loss(object,(object.t1(object.i+1)+object.t2(object.i+1))/2 , object.InsulationThickness     ); %kW
+                object.QLOSS(object.i+1) = object.length*Q_loss(object,(object.t1(object.i+1)+object.t2(object.i+1))/2); %kW
                 object.qloss1(object.i+1)=(object.Vol1(object.i+1)/(object.Vol1(object.i+1)+object.Vol2(object.i+1)))*object.QLOSS(object.i+1); %(kW)
                 object.qloss2(object.i+1)=(object.Vol2(object.i+1)/(object.Vol1(object.i+1)+object.Vol2(object.i+1)))*object.QLOSS(object.i+1); %(kW)
                 
@@ -349,7 +348,7 @@
             xlabel('time [s]')
             ylabel('quality')
         end
-      function Q_loss = Q_loss(~,internal_temp,InsulationThickness)
+      function Q_loss = Q_loss(~,internal_temp)
             %this function takes in the temperature inside the pipe and returns the
             %heat loss rate in kW/m
             %setting up pipe properties.
@@ -357,8 +356,7 @@
             kinsul=0.079; %(W/mK)
             Dpipe=0.8128; %pipe outer diameter (m)
             Tpipe=0.015875; %pipe thickness (m)
-            Tinsul = InsulationThickness; %insulation thickness (m)
-            Tairgap = 0.007; %[m]
+            Tinsul = 0; %insulation thickness (m)
             D=Dpipe+2*Tinsul; %total diameter (m)
             %assume Tf
             Tf=350; %(K)
@@ -378,12 +376,11 @@
                 Nu=(0.6+(0.387*Ra^(1/6))/(1+(0.559/Pr)^(9/16))^(8/27))^2;
                 h=(Nu*kair)/D;
                 R1=log((Dpipe/2)/((Dpipe-2*Tpipe)/2))/(2*pi*ksteel); %conductive resistance of pipe (m*K/W)
-                R2 = ((Dpipe/2+Tinsul)/(Dpipe/2))/(2*pi*kair);
-                R3=log((Dpipe/2+Tinsul+Tairgap)/(Dpipe/2+Tairgap))/(2*pi*kinsul); %conductive resistance of insul (m*K/W)
-                Rconv= 1./(h*pi*D); %(m*K/W)
-                Rtotal=R1+R2+R3+Rconv;
+                R2=log((Dpipe/2+Tinsul)/(Dpipe/2))/(2*pi*kinsul); %conductive resistance of insul (m*K/W)
+                Rconv= 1/(h*pi*D); %(m*K/W)
+                Rtotal=R1+R2+Rconv;
                 Tdelta=(internal_temp+273)-Tinf; %check the signs of the equations, make sure energy is flowing out t1>tinf
-                Q_conv=Tdelta./Rtotal; %W/m
+                Q_conv=Tdelta/Rtotal; %W/m
                 Ts1=Q_conv*Rconv+Tinf;
                 Ts2=Ts;
                 Ts=Ts1;
@@ -448,7 +445,7 @@
             object.VAP_OUT=zeros(object.N,1); %kg/s
             
         end
-        function object = initial_conditions(object, X0, P0, VTANK,InsulationThickness)
+        function object = initial_conditions(object, X0, P0, VTANK)
          
             object.x(object.i)=X0; %initial quality in tank
             object.p(object.i)=P0; %initial pressure in tank (bar)
@@ -560,7 +557,7 @@
     methods (Static)
 
         function accumulator = setup_accumulator(T_END,T_STORE,T_RAMP,DT,VTANK,P0,X0,LTANK,RTANK,discharge)
-            accumulator = steam_accumulator_separate(T_END,T_STORE,T_RAMP,DT,VTANK,P0,X0,LTANK,RTANK,discharge,InsulationThickness);
+            accumulator = steam_accumulator_separate(T_END,T_STORE,T_RAMP,DT,VTANK,P0,X0,LTANK,RTANK,discharge);
         end
         
         
